@@ -35,7 +35,7 @@ ks_1_fix$country %>% unique()
 ks_1_fix %>% 
   filter(country == "N,0\"") %>%
   view()
-
+#comment for test github
 ## launched year issue
 ks_1_fix %>%
   filter(launched < 2013-01-01) %>%
