@@ -74,7 +74,9 @@ body <- dashboardBody(
                         tabsetPanel(
                             tabPanel("Success Rate Predictor"), 
                             tabPanel("Similar Projects: Stats",
-                                     plotOutput("tab2_success_rate_plot")),
+                                     textOutput("tab2_similar_projects_text"),
+                                     plotOutput("tab2_success_rate_plot")
+                                     ),
                             tabPanel("Similar Projects: List", DT::dataTableOutput("tab2_similar_projects"))
                         )
                     )
@@ -252,6 +254,21 @@ server <- function(input, output) {
         
         return(pie_plot1)
     })
+    
+    #Tab2: Filter Details
+    output$tab2_similar_projects_text <- renderText(
+                                             paste(
+                                                 "Comparing ", input$tab2_main_category, ": ", input$tab2_sub_category,
+                                                 " Projects ",
+                                                 if_else_(input$tab2_goal_usd == 0, "Across All Goal Amounts.", paste(
+                                                     "with a Goal Amount in the Range of ",
+                                                     input$tab2_goal_usd*(1-0.25),
+                                                     " to ",
+                                                     input$tab2_goal_usd*(1+0.25), " USD."
+                                                 )
+                                                 )
+                                             )
+    )
 }
 
 shinyApp(ui, server)
