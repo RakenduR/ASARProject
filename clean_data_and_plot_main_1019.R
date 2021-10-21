@@ -195,3 +195,128 @@ cor.test(cor1$project_name_length, cor1$usd_pledged_real)
 #############
 #### END ####
 #############
+
+
+########JAMIE CHARTS###############################################
+library('scales')
+library(treemapify)
+library('treemap')
+
+#treemap of main category
+ks_cleaned %>%
+  group_by(main_category) %>%
+  summarise(count = n()) %>%
+  mutate(ct=count) %>%
+  ungroup %>%
+  #x = NULL %>%
+  ggplot((aes (area = ct, fill = `main_category`, label = paste(main_category)))) +
+  geom_treemap() +
+  geom_treemap_text(colour = "white",
+                    place = "centre",
+                    size = 10)
+
+
+#distribution of state for main cat - final
+ks_cleaned %>%
+  ggplot(aes (x = main_category, fill = restate))+
+  geom_bar()+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))
+
+
+#boxplot for success/fail project pledged goal
+ks_cleaned %>%
+  ggplot(aes(y = usd_pledged_real, x = main_category)) +
+  geom_boxplot()+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  scale_y_continuous(labels = comma)
+
+
+ks_cleaned %>%
+  ggplot(aes(y = usd_pledged_real, x = main_category)) +
+  geom_boxplot()+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  scale_y_continuous(labels = comma)+
+  coord_cartesian(ylim = c(0,10000))
+
+
+
+#category success rate - 1 bar final 
+state.pct <- ks_cleaned %>%
+  filter(restate %in% c("successful", "failed")) %>%
+  group_by(main_category, restate) %>%
+  summarize(count=n()) %>%
+  mutate(pct=count/sum(count)) %>%
+  arrange(desc(restate), pct)
+
+state.pct$main_category <- factor(state.pct$main_category, 
+                                  levels=state.pct$main_category[1:(nrow(state.pct)/2)])
+
+ggplot(state.pct, aes(main_category, pct, fill=restate)) + geom_bar(stat="identity") + 
+  ggtitle("Success vs. Failure Rate by Project Category") + 
+  xlab("Project Category") + ylab("Percentage") + scale_y_continuous(labels=scales::percent) + 
+  scale_fill_discrete(name="Project Status", breaks=c("successful", "failed"),
+                      labels=c("Success", "Failure")) + 
+  geom_text(aes(label=paste0(round(pct*100,1),"%")), position=position_stack(vjust=0.5), 
+            colour="white", size=5)+ 
+  theme(plot.title=element_text(hjust=0.5), axis.title=element_text(size=12, face="bold"), 
+        axis.text.x=element_text(size=12), legend.position="bottom", 
+        legend.title=element_text(size=12, face="bold")) + coord_flip()
+
+#subcategory success rate - to incorporate in shiny
+ks_cleaned %>%
+  ggplot(aes(y = category)) +
+  geom_bar(aes(fill = restate), position = position_dodge())+
+  facet_wrap(~ main_category, scales = "free")
+
+
+#project state by month
+ks_cleaned %>%
+  mutate(month = as.integer(format(launched, "%m"))) %>%
+  group_by(month) %>%
+  summarise(sucessfull = sum(restate == "successful"),
+            failed = sum(restate == "failed"),
+            success_rate = round(sum(state == "successful") / n(), digits = 2),
+            failed_rate = round(sum(state == "failed") / n(), digits = 2)) %>%
+  arrange(month)
+
+plot1 <- ks_cleaned %>%
+  mutate(month = as.integer(format(launched, "%m"))) %>%
+  group_by(month, restate) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count), label = scales::percent(percentage)) %>%
+  arrange(month)
+ggplot(plot1, aes(x = month, y = percentage)) +
+  geom_line(aes(color = restate)) + 
+  scale_color_manual(values = c("successful" = "green", "failed" = "red")) + 
+  scale_y_continuous(breaks = seq(0, 1, 0.2), labels = paste(seq(0, 100, 20), "%", sep = "")) +
+  labs(y = "Percent", fill = "State", x = "Month", title = "Project state by month") + 
+  theme_minimal()
+
+#boxplot for goal
+ks_cleaned %>%
+  ggplot(aes(y = usd_goal_real, x = main_category)) +
+  geom_boxplot()+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  scale_y_continuous(labels = comma)
+
+
+ks_cleaned %>%
+  ggplot(aes(y = usd_goal_real, x = main_category)) +
+  geom_boxplot()+
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  scale_y_continuous(labels = comma)+
+  coord_cartesian(ylim = c(0,50000))
+
+#treemap of main category
+ks_cleaned %>%
+  group_by(main_category) %>%
+  summarise(count = n()) %>%
+  mutate(ct=count) %>%
+  ungroup %>%
+  #x = NULL %>%
+  ggplot((aes (area = ct, fill = `main_category`, label = paste(main_category)))) +
+  geom_treemap() +
+  geom_treemap_text(colour = "white",
+                    place = "centre",
+                    size = 10)
+#######################END-JAMIE CHARTS####################################
