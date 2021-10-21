@@ -63,9 +63,9 @@ body <- dashboardBody(
                         
                         uiOutput("tab2_sub_category_input"),
                         
-                        dateInput("tab2_project_date_start", label = "Your Fundraiser Start Date", value = Sys.Date()),
+                        dateInput("tab2_project_date_start", label = "Your Fundraiser Start Date", value = Sys.Date(), min = Sys.Date()),
                         
-                        dateInput("tab2_project_date_end", label = "Your Fundraiser End Date", value = Sys.Date()+30),
+                        uiOutput("tab2_project_date_end_input"),
                         
                         numericInput("tab2_goal_usd", label = "Your Fundraiser Goal in USD", value = 0, min = 0, step = 1)
                         
@@ -74,9 +74,55 @@ body <- dashboardBody(
                         tabsetPanel(
                             tabPanel("Success Rate Predictor"), 
                             tabPanel("Similar Projects: Stats",
+                                     
                                      textOutput("tab2_similar_projects_text"),
-                                     plotOutput("tab2_success_rate_plot")
+                                     
+                                     fluidRow(
+                                         
+                                         column(6,
+                                                wellPanel(
+                                                    textOutput("tab2_success_rate_text"),
+                                                    
+                                                    textOutput("tab2_mean_cnt_success_backers_text"),
+                                                    
+                                                    
+                                                    textOutput("tab2_mean_cnt_failed_backers_text"),
+                                                    
+                                                    
+                                                    textOutput("tab2_mean_success_usd_per_backer_text"),
+                                                    
+                                                    
+                                                    textOutput("tab2_mean_failed_usd_per_backer_text")
+                                                    
+                                                    )
+                                                ),
+                                         
+                                         column(6,
+                                                wellPanel(
+                                                    plotOutput("tab2_success_rate_plot")
+                                                )
+                                         ),
+                                         
+                                         ),
+                                     
+                                     fluidRow(
+                                         
+                                         column(6,
+                                                wellPanel(
+                                                    plotOutput("tab2_cnt_backers_plot")
+                                                )
+                                         ),
+                                         
+                                         column(6,
+                                                wellPanel(
+                                                    plotOutput("tab2_usd_per_backer_plot")
+                                                )
+                                         ),
+                                         
+                                     )
+                                     
                                      ),
+                                    
                             tabPanel("Similar Projects: List", DT::dataTableOutput("tab2_similar_projects"))
                         )
                     )
@@ -214,9 +260,15 @@ server <- function(input, output) {
     output$tab2_similar_projects <- DT::renderDataTable(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                                                                    & ks_cleaned$category == input$tab2_sub_category
                                                                    & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                                                                   & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
                                                                    ,c("name", "main_category", "category", "launched", "deadline", "launch_period", "state", "backers", "country", "usd_goal_real", "usd_pledged_real", "dollar_per_backer")
                                                                    ], options = list(scrollX = TRUE)
     )
+    
+    #Tab2: Dynamic Input for Launch Date End
+    output$tab2_project_date_end_input <- renderUI({
+        dateInput("tab2_project_date_end", label = "Your Fundraiser End Date", value = Sys.Date()+30, min = input$tab2_project_date_start+1)
+    })
     
     #Tab2: Success Rate
     output$tab2_success_rate_plot <- renderPlot({
@@ -224,35 +276,20 @@ server <- function(input, output) {
         ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
            & ks_cleaned$category == input$tab2_sub_category
            & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+           & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
            ,] %>% 
-            mutate(state_2 = if_else_(state == "successful", "success", "fail")) %>%
-            group_by(state_2) %>%
+            mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
+            group_by(project_status) %>%
             summarise(count = n())%>%
             mutate(per=count/sum(count)) %>%
             ungroup %>%
-            ggplot(aes(x="",y=per*100,  fill=state_2, label=round(per*100,1))) + geom_col() +
-            geom_text(size = 3, position = position_stack(vjust = 0.5)) +
-            ylab("Percent") + xlab("")
+            ggplot(aes(x="",y=per,  fill=project_status)) + geom_col() +
+            geom_text(aes(label = round(per*100,1)), position = position_stack(vjust = 0.5))+
+            coord_polar("y", start = 0) + theme_void() +
+            ggtitle("Summary of Success (%)") + ylab("") +
+            theme(plot.title = element_text(hjust = 0.5))
         
-        #change the bar graph into pie
-        pie_plot1 <- bp + coord_polar("y", start=0)
-        
-        #build blank theme
-        blank_theme <- theme_minimal()+
-            theme(
-                axis.title.x = element_blank(),
-                axis.title.y = element_blank(),
-                panel.border = element_blank(),
-                panel.grid=element_blank(),
-                axis.ticks = element_blank(),
-                plot.title=element_text(size=14, face="bold")
-            )
-        
-        #apply blank them to pie and apply blues theme
-        pie_plot1 <- pie_plot1 + scale_fill_brewer("Blues") + blank_theme +
-            theme(axis.text.x=element_blank())
-        
-        return(pie_plot1)
+        return(bp)
     })
     
     #Tab2: Filter Details
@@ -260,15 +297,131 @@ server <- function(input, output) {
                                              paste(
                                                  "Comparing ", input$tab2_main_category, ": ", input$tab2_sub_category,
                                                  " Projects ",
-                                                 if_else_(input$tab2_goal_usd == 0, "Across All Goal Amounts.", paste(
+                                                 if_else_(input$tab2_goal_usd == 0, "Across All Goal Amounts", paste(
                                                      "with a Goal Amount in the Range of ",
                                                      input$tab2_goal_usd*(1-0.25),
                                                      " to ",
-                                                     input$tab2_goal_usd*(1+0.25), " USD."
+                                                     input$tab2_goal_usd*(1+0.25), " USD"
                                                  )
-                                                 )
+                                                 ),
+                                                 ", and with a Fundraising Period of around ",
+                                                 round((input$tab2_project_date_end - input$tab2_project_date_start)*(1-0.25)),
+                                                 "-",
+                                                 round((input$tab2_project_date_end - input$tab2_project_date_start)*(1+0.25)),
+                                                 " days."
                                              )
     )
+    
+    #Tab2: Breakdown of Backers (USD per Backer)
+    output$tab2_usd_per_backer_plot <- renderPlot({
+        
+        output_plot <-
+            ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                       & ks_cleaned$category == input$tab2_sub_category
+                       & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                       & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                       ,] %>%
+            ggplot() + geom_histogram(aes(x=dollar_per_backer), binwidth=100, ) + 
+            theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+        
+        return(output_plot)
+    })
+    
+    #Tab2: Breakdown of Backers (Count of Backers)
+    output$tab2_cnt_backers_plot <- renderPlot ({
+        output_plot <-
+            ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                       & ks_cleaned$category == input$tab2_sub_category
+                       & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                       & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                       ,] %>%
+            ggplot() + geom_histogram(aes(x=backers), binwidth=100, ) + 
+            theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+        
+        return(output_plot)
+    })
+    
+    #Tab2: Summary Text Stats
+    
+    output$tab2_success_rate_text <- renderText(
+        paste("Historical Success Rate: ",
+              round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                         & ks_cleaned$category == input$tab2_sub_category
+                         & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         ,] %>%
+                mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
+                group_by(project_status) %>%
+                summarise(count = n())%>%
+                mutate(per=count/sum(count)) %>%
+                filter(project_status == "success") %>%
+                pull(per)*100, 2),
+             "%"
+             )
+    )
+    
+    output$tab2_mean_cnt_success_backers_text <- renderText(
+        paste("Average Count of Backers in Successful Projects: ",
+              round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                         & ks_cleaned$category == input$tab2_sub_category
+                         & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         ,] %>%
+                  mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
+                  group_by(project_status) %>%
+                  summarise(avg_backers = mean(backers))%>%
+                  filter(project_status == "success") %>%
+                  pull(avg_backers), 2)
+        )
+    )
+    
+    output$tab2_mean_cnt_failed_backers_text <- renderText(
+        paste("Average Count of Backers in Failed Projects: ",
+              round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                         & ks_cleaned$category == input$tab2_sub_category
+                         & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         ,] %>%
+                  mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
+                  group_by(project_status) %>%
+                  summarise(avg_backers = mean(backers))%>%
+                  filter(project_status == "fail") %>%
+                  pull(avg_backers), 2)
+        )
+    )
+    
+    output$tab2_mean_success_usd_per_backer_text <- renderText(
+        paste("Average USD Pledge per Backer in Successful Projects: ",
+              round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                         & ks_cleaned$category == input$tab2_sub_category
+                         & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         ,] %>%
+                  mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
+                  group_by(project_status) %>%
+                  summarise(avg_usd = mean(dollar_per_backer))%>%
+                  filter(project_status == "success") %>%
+                  pull(avg_usd), 2),
+              " USD"
+        )
+    )
+
+    output$tab2_mean_failed_usd_per_backer_text <- renderText(
+        paste("Average USD Pledge per Backer in Failed Projects: ",
+              round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
+                         & ks_cleaned$category == input$tab2_sub_category
+                         & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
+                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         ,] %>%
+                  mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
+                  group_by(project_status) %>%
+                  summarise(avg_usd = mean(dollar_per_backer))%>%
+                  filter(project_status == "fail") %>%
+                  pull(avg_usd), 2),
+              " USD"
+        )
+    )
+    
 }
 
 shinyApp(ui, server)
