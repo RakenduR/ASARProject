@@ -6,6 +6,7 @@ library(hablar)
 library(ggplot2)
 library(scales)
 library(shinydashboard)
+library(flexdashboard)
 
 # # Load Dataset
 # ks_1 <- read.csv("dataset/ks-projects-201801.csv")
@@ -26,6 +27,8 @@ library(shinydashboard)
 #     mutate(dollar_per_backer = replace_na(dollar_per_backer,0))
 
 ks_cleaned <- readRDS(file = "dataset/ks_cleaned.rds")
+tab2_glm <- readRDS(file = "models/tab2_glm.rds")
+test_data <- readRDS(file = "models/test_data.rds")
 
 #prepare the sidebar
 sidebar <- dashboardSidebar(
@@ -67,12 +70,36 @@ body <- dashboardBody(
                         
                         uiOutput("tab2_project_date_end_input"),
                         
-                        numericInput("tab2_goal_usd", label = "Your Fundraiser Goal in USD", value = 0, min = 0, step = 1)
+                        numericInput("tab2_goal_usd", label = "Your Fundraiser Goal in USD", value = 0, min = 0, step = 1),
+                        
+                        sliderInput("tab2_success_prediction_criteria", label = "How Sure Should the Model be to Predict a Success? (Higher = More Conservative about Predicting Success):", value = 50, min = 0, max = 100, post = "%")
                         
                     ),
                     mainPanel(
                         tabsetPanel(
-                            tabPanel("Success Rate Predictor"), 
+                            tabPanel("Success Rate Predictor",
+                                     fluidRow(
+                                         column(6,
+                                               wellPanel(
+                                                   gaugeOutput("tab2_glm_prediction_num_plot")
+                                               ),
+                                               wellPanel(
+                                                   textOutput("tab2_glm_prediction_text"),
+                                                   tags$head(tags$style("#tab2_glm_prediction_text{color: Black;
+                                                             font-size: 40px;
+                                                             font-style: bold;
+                                                             }"
+                                                   )
+                                                   )
+                                               )
+                                               ),
+                                         column(6,
+                                                wellPanel(
+                                                    verbatimTextOutput("confusion_matrix_text")
+                                                )
+                                         ),
+                                     )
+                                     ), 
                             tabPanel("Similar Projects: Stats",
                                      
                                      textOutput("tab2_similar_projects_text"),
@@ -260,7 +287,7 @@ server <- function(input, output) {
     output$tab2_similar_projects <- DT::renderDataTable(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                                                                    & ks_cleaned$category == input$tab2_sub_category
                                                                    & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                                                                   & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                                                                   & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                                                                    ,c("name", "main_category", "category", "launched", "deadline", "launch_period", "state", "backers", "country", "usd_goal_real", "usd_pledged_real", "dollar_per_backer")
                                                                    ], options = list(scrollX = TRUE)
     )
@@ -276,8 +303,8 @@ server <- function(input, output) {
         ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
            & ks_cleaned$category == input$tab2_sub_category
            & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-           & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
-           ,] %>% 
+           & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
+           ,] %>%
             mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
             group_by(project_status) %>%
             summarise(count = n())%>%
@@ -319,7 +346,7 @@ server <- function(input, output) {
             ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                        & ks_cleaned$category == input$tab2_sub_category
                        & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                       & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                       & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                        ,] %>%
             ggplot() + geom_histogram(aes(x=dollar_per_backer), binwidth=100, ) + 
             theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -333,7 +360,7 @@ server <- function(input, output) {
             ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                        & ks_cleaned$category == input$tab2_sub_category
                        & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                       & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                       & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                        ,] %>%
             ggplot() + geom_histogram(aes(x=backers), binwidth=100, ) + 
             theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -348,7 +375,7 @@ server <- function(input, output) {
               round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                          & ks_cleaned$category == input$tab2_sub_category
                          & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                          ,] %>%
                 mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
                 group_by(project_status) %>%
@@ -365,7 +392,7 @@ server <- function(input, output) {
               round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                          & ks_cleaned$category == input$tab2_sub_category
                          & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                          ,] %>%
                   mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
                   group_by(project_status) %>%
@@ -380,7 +407,7 @@ server <- function(input, output) {
               round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                          & ks_cleaned$category == input$tab2_sub_category
                          & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                          ,] %>%
                   mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
                   group_by(project_status) %>%
@@ -395,7 +422,7 @@ server <- function(input, output) {
               round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                          & ks_cleaned$category == input$tab2_sub_category
                          & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                          ,] %>%
                   mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
                   group_by(project_status) %>%
@@ -411,7 +438,7 @@ server <- function(input, output) {
               round(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
                          & ks_cleaned$category == input$tab2_sub_category
                          & if(input$tab2_goal_usd == 0){TRUE} else {abs(ks_cleaned$usd_goal_real - input$tab2_goal_usd) / input$tab2_goal_usd < 0.25}
-                         & (abs(ks_cleaned$launch_period - (input$tab2_project_date_end - input$tab2_project_date_start))/(input$tab2_project_date_end - input$tab2_project_date_start)) < 0.25
+                         & (abs(as.numeric(ks_cleaned$launch_period) - as.numeric((input$tab2_project_date_end - input$tab2_project_date_start)))/as.numeric((input$tab2_project_date_end - input$tab2_project_date_start))) < 0.25
                          ,] %>%
                   mutate(project_status = if_else_(state == "successful", "success", "fail")) %>%
                   group_by(project_status) %>%
@@ -421,6 +448,98 @@ server <- function(input, output) {
               " USD"
         )
     )
+    
+    # Creating Global Data Frame
+    data_frame_of_input <- reactiveValues(
+        input_data = data.frame()
+    )
+    
+    df_input <- reactive({
+        data_frame_of_input$input_data = 
+            data.frame(
+            category = c(input$tab2_sub_category), 
+            main_category = c(input$tab2_main_category), 
+            usd_goal_real = c(input$tab2_goal_usd), 
+            launch_period = c(input$tab2_project_date_end - input$tab2_project_date_start)
+        )
+        
+        return(data_frame_of_input$input_data)
+    })
+    
+    output$df <- renderDataTable(
+        data.frame(
+            main_category = c(input$tab2_main_category), 
+            sub_category = c(input$tab2_sub_category), 
+            goal_in_usd = c(input$tab2_goal_usd), 
+            launch_period = c(input$tab2_project_date_end - input$tab2_project_date_start)
+        )
+    )
+    
+    output$tab2_glm_prediction_text <- renderText(
+        paste("Logistic Model Prediction: ",
+              if(input$tab2_project_name == "") {"Unnamed Project"} else {input$tab2_project_name},
+              " is predicted to ",
+        
+        ifelse(
+            tab2_glm %>% predict(
+                data.frame(
+                category = c(input$tab2_sub_category), 
+                main_category = c(input$tab2_main_category), 
+                usd_goal_real = c(input$tab2_goal_usd), 
+                launch_period = c(input$tab2_project_date_end - input$tab2_project_date_start)
+            )
+            , type = "response")
+            > input$tab2_success_prediction_criteria/100, "be successful", "fail")
+        
+        )
+        
+    )
+    
+    output$tab2_glm_prediction_num_text <- renderText(
+        tab2_glm %>% predict(
+            data.frame(
+                category = c(input$tab2_sub_category), 
+                main_category = c(input$tab2_main_category), 
+                usd_goal_real = c(input$tab2_goal_usd), 
+                launch_period = c(input$tab2_project_date_end - input$tab2_project_date_start)
+            ), type = "response")
+    )
+    
+    output$tab2_glm_prediction_num_plot <- renderGauge({
+        
+        predict_result <- tab2_glm %>% predict(
+            data.frame(
+                category = c(input$tab2_sub_category), 
+                main_category = c(input$tab2_main_category), 
+                usd_goal_real = c(input$tab2_goal_usd), 
+                launch_period = c(input$tab2_project_date_end - input$tab2_project_date_start)
+            ), type = "response")
+        
+        plot <- gauge(
+                round(predict_result[[1]]*100),
+                min = 0,
+                max = 100,
+                sectors = gaugeSectors(
+                    success = c(input$tab2_success_prediction_criteria,100),
+                    danger = c(0,input$tab2_success_prediction_criteria)
+                )
+        )
+                
+        return(plot)
+    })
+    
+    output$confusion_matrix_text <- renderPrint({
+        
+        probabilities <- fit %>% predict(test_data[, c("category", "main_category", "usd_goal_real", "launch_period")])
+        
+        predicted.classes <- ifelse(probabilities > input$tab2_success_prediction_criteria/100, "successful", "failed")
+        
+        mean(predicted.classes == test.data$restate)
+        
+        cm <- confusionMatrix(data=as.factor(predicted.classes) , reference = as.factor(test.data$restate), positive = "successful")
+        
+        return(cm)
+    })
     
 }
 
