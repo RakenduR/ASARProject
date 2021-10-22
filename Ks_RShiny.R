@@ -30,8 +30,8 @@ library(ggthemes)
 #     mutate(dollar_per_backer = replace_na(dollar_per_backer,0))
 
 ks_cleaned <- readRDS(file = "dataset/ks_cleaned.rds")
-tab2_glm <- readRDS(file = "models/tab2_glm.rds")
-test_data <- readRDS(file = "models/test_data.rds")
+tab2_glm <- readRDS(file = "model/tab2_glm_compressed.rds")
+test_data <- readRDS(file = "model/test_data.rds")
 
 #prepare the sidebar
 sidebar <- dashboardSidebar(
@@ -668,7 +668,7 @@ server <- function(input, output) {
     
     output$confusion_matrix_text <- renderPrint({
         
-        probabilities <- fit %>% predict(test_data[, c("category", "main_category", "usd_goal_real", "launch_period")])
+        probabilities <- tab2_glm %>% predict(test_data[, c("category", "main_category", "usd_goal_real", "launch_period")])
         
         predicted.classes <- ifelse(probabilities > input$tab2_success_prediction_criteria/100, "successful", "failed")
         
