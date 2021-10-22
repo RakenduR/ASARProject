@@ -6,7 +6,10 @@ library(hablar)
 library(ggplot2)
 library(scales)
 library(shinydashboard)
+
 library(flexdashboard)
+
+library(ggthemes)
 
 # # Load Dataset
 # ks_1 <- read.csv("dataset/ks-projects-201801.csv")
@@ -35,7 +38,7 @@ sidebar <- dashboardSidebar(
     sidebarMenu(
         menuItem("Tab1" ,tabName = "Tab1", icon = icon("dashboard")),
         menuItem("Kickstarter Planning",tabName = "Tab2", icon = icon("brain")),
-        menuItem("Tab3", tabName = "Tab3", icon = icon("chart-line"))
+        menuItem("Summary", tabName = "Summary", icon = icon("chart-line"))
         
     )
 )
@@ -157,25 +160,40 @@ body <- dashboardBody(
             )
         ),
         tabItem(
-            tabName = 'Tab3',
+            tabName = 'Summary',
             fluidPage(
-                titlePanel("Project Status Pie"),
+                titlePanel("Summary of Past KickStarter Projects"),
                 fluidRow(
                     column(
                         width = 12,
                         tabsetPanel(
-                            tabPanel("Status",
+                            tabPanel("",
                                      fluidRow(
                                          tableOutput(outputId = "status"),
                                          box(
                                              plotOutput(outputId = "pie_plot1",
-                                                        click = "plot_click"),
-                                             verbatimTextOutput('mouse')
+                                                        click = "plot_click",
+                                                        height = 600),
+
                                          ),
                                          box(
-                                             plotOutput(outputId = "bp_plot1",
-                                                        click = "plot1_click"),
-                                             verbatimTextOutput('mouse1')
+                                             verbatimTextOutput('result'),
+                                             plotOutput(outputId = "box_plot1",
+                                                        height = 600)
+                                         )
+                                     ),
+                                     fluidRow(
+                                         tableOutput(outputId = "summary"),
+                                         box(
+                                             plotOutput(outputId = "bar_plot1",
+                                                        click = "bplot_click",
+                                                        height = 600)
+                                         ),
+                                         box(
+                                             verbatimTextOutput('barresult'),
+                                             plotOutput(outputId = "box_plot2",
+                                                        height = 600)
+
                                          )
                                      )
                             )
@@ -198,18 +216,30 @@ ui <- dashboardPage(
 # create the server functions for the dashboard  
 server <- function(input, output) {
     
+#############
+####Tab 3####
+#############
+    
+    bpdata <- ks_cleaned %>%
+        rename(Project_Status = restate) %>%
+        group_by(Project_Status) %>%
+        summarise(count = n())%>%
+        mutate(per=count/sum(count)) %>%
+        ungroup
+    
+    bp_decode <- bpdata %>% arrange(desc(Project_Status)) %>%
+        mutate(csum=cumsum(per),
+               lagcsum=lag(csum,default=0))
+    
     # Tab 3 - display pie chart
     output$pie_plot1 <- renderPlot({
         
         #prepare the bar graph
-        bp <- ks_cleaned %>%
-            group_by(state) %>%
-            summarise(count = n())%>%
-            mutate(per=count/sum(count)) %>%
-            ungroup %>%
-            ggplot(aes(x="",y=per*100,  fill=state, label=round(per*100,1))) + geom_col() +
-            geom_text(size = 3, position = position_stack(vjust = 0.5)) +
-            ylab("Percent") + xlab("")
+        bp <-  bpdata%>%
+            ggplot(aes(x="",y=per,  fill=Project_Status)) + geom_col() +
+            geom_text(aes(label = round(per*100,1)), position = position_stack(vjust = 0.5))+
+            coord_polar("y", start = 0) + theme_void() +
+            ggtitle("Summary of Success (%)") + ylab("")
         
         #change the bar graph into pie
         pie_plot1 <- bp + coord_polar("y", start=0)
@@ -226,31 +256,75 @@ server <- function(input, output) {
             )
         
         #apply blank them to pie and apply blues theme
-        pie_plot1 <- pie_plot1 + scale_fill_brewer("Blues") + blank_theme +
+        pie_plot1 <- pie_plot1 + scale_fill_brewer(palette= "Blues", name="Legend", labels=c("Failed","Successful")) + blank_theme +
             theme(axis.text.x=element_blank())
         
         
         return(pie_plot1)
     })
     
-    #display the return on pie click below the pie
-    output$mouse <- renderPrint({
-        text <- str(input$plot_click)
-        return(text)
+    click_result <- reactive({
+        ipc <- req(input$plot_click)
+        y_val <- ipc$y
+        bp_decode %>% rowwise %>% filter(
+            between(y_val,
+                    lagcsum,
+                    csum)) %>% pull(Project_Status)
+    })
+    
+    # output$result <- renderText({
+    #     if(req(click_result()) == "successful"){
+    #         text = "Pledged Amount of Successful Projects"
+    #     }else{
+    #         text = "Pledged Amount of Failed Projects"
+    #     }
+    #     return(text)
+    # 
+    # })
+    
+    #Boxplot corresponding to pie chart
+    output$box_plot1 <- renderPlot({
+        
+        box <- ks_cleaned %>%
+            ggplot(aes(y = usd_pledged_real, x = main_category)) +
+            geom_boxplot()+
+            scale_x_discrete(guide = guide_axis(n.dodge=2))+
+            scale_y_continuous(labels = comma)+
+            coord_cartesian(ylim = c(0,10000))
+        
+        
+        if (!is.null(req(click_result()))){
+            
+            if(req(click_result()) == "successful"){
+                text = "Pledged Amount of Successful Projects"
+            }else{
+                text = "Pledged Amount of Failed Projects"
+            }
+            
+            box <- ks_cleaned %>%
+                filter(state == click_result()) %>%
+                ggplot(aes(y = usd_pledged_real, x = main_category)) +
+                geom_boxplot()+
+                scale_x_discrete(guide = guide_axis(n.dodge=2))+
+                scale_y_continuous(labels = comma)+
+                coord_cartesian(ylim = c(0,10000)) +
+                ggtitle(text)
+            
+        }
+        
+        return(box)
     })
     
     #Tab 3 - display bar plot
-    output$bp_plot1 <- renderPlot({
+    output$bar_plot1 <- renderPlot({
         
         #prepare the bar
-        bp <- ks_cleaned %>%
-            group_by(state) %>%
-            summarise(count = n())%>%
-            mutate(per=count/sum(count)) %>%
-            ungroup %>%
-            ggplot(aes(x="",y=per*100,  fill=state, label=round(per*100,1))) + geom_col() +
-            geom_text(size = 3, position = position_stack(vjust = 0.5)) +
-            ylab("Percent") + xlab("")
+        bp <- bpdata%>%
+            ggplot(aes(x="",y=per,  fill=Project_Status)) + geom_col() +
+            geom_text(aes(label = round(per*100,1)), position = position_stack(vjust = 0.5))+
+            theme_void() +
+            ggtitle("Summary of Success (%)") + ylab("") +
+            scale_color_brewer(palette= "Blues")
         
         #build blank theme
         blank_theme <- theme_minimal()+
@@ -260,20 +334,79 @@ server <- function(input, output) {
                 panel.border = element_blank(),
                 panel.grid=element_blank(),
                 axis.ticks = element_blank(),
-                plot.title=element_text(size=14, face="bold")
+                plot.title=element_text(size=14, face="bold") +
+                    scale_color_brewer(palette= "Blues")
             )
         
         #apply blank theme and blue theme to bar
-        bp <- bp + scale_fill_brewer("Blues") + blank_theme
+        bp <- bp + scale_fill_brewer(palette= "Blues", name="Legend", labels=c("Failed","Successful")) + blank_theme
         
         #return bar to ui
         return(bp)
     })
     
-    output$mouse1 <- renderPrint({
-        text <- str(input$plot1_click)
-        return(text)
+    bclick_result <- reactive({
+        ipc <- req(input$bplot_click)
+        y_val <- ipc$y
+        bp_decode %>% rowwise %>% filter(
+            between(y_val,
+                    lagcsum,
+                    csum)) %>% pull(Project_Status)
     })
+    
+    # output$barresult <- renderText({
+    #     if(req(bclick_result()) == "successful"){
+    #         text = "Pledged Amount of Successful Projects"
+    #     }else{
+    #         text = "Pledged Amount of Failed Projects"
+    #     }
+    #     return(text)
+    # })
+    
+    #Boxplot corresponding to bar chart
+    output$box_plot2 <- renderPlot({
+        
+        if (!is.null(req(click_result()))){
+            
+            if(req(bclick_result()) == "successful"){
+                text = "Pledged Amount of Successful Projects"
+            }else{
+                text = "Pledged Amount of Failed Projects"
+            }
+        }
+        
+        box <- ks_cleaned %>%
+            ggplot(aes(y = usd_pledged_real, x = main_category)) +
+            geom_boxplot()+
+            scale_x_discrete(guide = guide_axis(n.dodge=2))+
+            scale_y_continuous(labels = comma)+
+            coord_cartesian(ylim = c(0,10000))+ 
+            ggtitle(text)
+            
+        
+        
+        if (!is.null(req(bclick_result()))){
+            box <- ks_cleaned %>%
+                filter(state == bclick_result())%>%
+                ggplot(aes(y = usd_pledged_real, x = main_category)) +
+                geom_boxplot()+
+                scale_x_discrete(guide = guide_axis(n.dodge=2))+
+                scale_y_continuous(labels = comma)+
+                coord_cartesian(ylim = c(0,10000)) +
+                ggtitle(text)
+            
+        }
+        
+        return(box)
+    })
+    
+####################
+####End of Tab 3####
+####################
+    
+#############
+####Tab 2####
+#############
     
     #Tab2: Dynamic Input for Sub Category
     output$tab2_sub_category_input <- renderUI({
@@ -282,6 +415,8 @@ server <- function(input, output) {
                     choices=unique(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category, "category"])
         )
     })
+    
+
     
     #Tab2: List of Similar Projects
     output$tab2_similar_projects <- DT::renderDataTable(ks_cleaned[ks_cleaned$main_category == input$tab2_main_category
@@ -448,6 +583,9 @@ server <- function(input, output) {
               " USD"
         )
     )
+####################
+####End of Tab 2####
+####################
     
     # Creating Global Data Frame
     data_frame_of_input <- reactiveValues(
