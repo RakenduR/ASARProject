@@ -8,6 +8,7 @@ library(scales)
 library(shinydashboard)
 
 library(flexdashboard)
+library(caret)
 
 library(ggthemes)
 
@@ -672,9 +673,9 @@ server <- function(input, output) {
         
         predicted.classes <- ifelse(probabilities > input$tab2_success_prediction_criteria/100, "successful", "failed")
         
-        mean(predicted.classes == test.data$restate)
+        mean(predicted.classes == test_data$restate)
         
-        cm <- confusionMatrix(data=as.factor(predicted.classes) , reference = as.factor(test.data$restate), positive = "successful")
+        cm <- confusionMatrix(data=as.factor(predicted.classes) , reference = as.factor(test_data$restate), positive = "successful")
         
         return(cm)
     })
