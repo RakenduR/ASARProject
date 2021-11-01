@@ -168,21 +168,21 @@ body <- dashboardBody(
                     column(
                         width = 12,
                         tabsetPanel(
-                            tabPanel("",
-                                     fluidRow(
-                                         tableOutput(outputId = "status"),
-                                         box(
-                                             plotOutput(outputId = "pie_plot1",
-                                                        click = "plot_click",
-                                                        height = 600),
-                                             
-                                         ),
-                                         box(
-                                             verbatimTextOutput('result'),
-                                             plotOutput(outputId = "box_plot1",
-                                                        height = 600)
-                                         )
-                                     ),
+                             tabPanel("",
+                            #          fluidRow(
+                            #              tableOutput(outputId = "status"),
+                            #              box(
+                            #                  plotOutput(outputId = "pie_plot1",
+                            #                             click = "plot_click",
+                            #                             height = 600),
+                            #                  
+                            #              ),
+                            #              box(
+                            #                  verbatimTextOutput('result'),
+                            #                  plotOutput(outputId = "box_plot1",
+                            #                             height = 600)
+                            #              )
+                            #          ),
                                      fluidRow(
                                          tableOutput(outputId = "summary"),
                                          box(
@@ -401,7 +401,7 @@ server <- function(input, output) {
     #Boxplot corresponding to bar chart
     output$box_plot2 <- renderPlot({
         
-        if (!is.null(req(click_result()))){
+        if (!is.null(req(bclick_result()))){
             
             if(req(bclick_result()) == "successful"){
                 text = "Pledged Amount of Successful Projects"
