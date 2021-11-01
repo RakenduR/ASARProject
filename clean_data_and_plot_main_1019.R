@@ -139,6 +139,7 @@ ks_cleaned %>%
   rename(Project_Status = restate) %>%
   ggplot(aes(x=launch_period, y=usd_pledged_real, shape=Project_Status, color=Project_Status)) + 
   geom_point()+
+  geom_smooth(method=lm, se=FALSE, linetype="dashed", color="darkred")+
   ylab('Pledged amount USD')+
   xlab('Launch Period (Days)')+
   facet_wrap(~Project_Status,ncol=2)+
@@ -146,11 +147,12 @@ ks_cleaned %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 
 
-#### Launch period vs length of project name by state of project ####
+#### pledged amount vs length of project name by state of project ####
 ks_cleaned %>%
   rename(Project_Status = restate) %>%
   ggplot(aes(x=project_name_length, y=usd_pledged_real, shape=Project_Status, color=Project_Status)) + 
   geom_point()+
+  geom_smooth(method=lm, se=FALSE, linetype="dashed", color="darkred")+
   ylab('Pledged amount USD')+
   xlab('Length of project name (characters)')+
   facet_wrap(~Project_Status,ncol=2)+
