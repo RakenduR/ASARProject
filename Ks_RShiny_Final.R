@@ -415,7 +415,7 @@ server <- function(input, output) {
             geom_boxplot()+
             scale_x_discrete(guide = guide_axis(n.dodge=2))+
             scale_y_continuous(labels = comma)+
-            coord_cartesian(ylim = c(0,10000))+ 
+            coord_cartesian(ylim = c(0,80000))+ 
             ggtitle(text)
         
         
@@ -427,7 +427,7 @@ server <- function(input, output) {
                 geom_boxplot()+
                 scale_x_discrete(guide = guide_axis(n.dodge=2))+
                 scale_y_continuous(labels = comma)+
-                coord_cartesian(ylim = c(0,10000)) +
+                coord_cartesian(ylim = c(0,80000)) +
                 ggtitle(text)
             
         }
