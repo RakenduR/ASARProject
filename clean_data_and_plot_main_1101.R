@@ -298,11 +298,11 @@ plot1 <- ks_cleaned %>%
   mutate(percentage = count / sum(count), label = scales::percent(percentage)) %>%
   arrange(month)
 ggplot(plot1, aes(x = month, y = percentage)) +
-  geom_line(aes(color = restate)) + 
-  scale_color_manual(values = c("successful" = "green", "failed" = "red")) + 
+  geom_line(aes(color = restate), lwd = 1) + 
+  scale_color_manual("Project Status",values = c("successful" = "green", "failed" = "red"), labels=c("Successful","Failed")) + 
   scale_y_continuous(breaks = seq(0, 1, 0.2), labels = paste(seq(0, 100, 20), "%", sep = "")) +
-  labs(y = "Percent", fill = "State", x = "Month", title = "Project state by month") + 
-  theme_minimal()
+  labs(y = "Percent", fill = "State", x = "Month", title = "Project State by Month") + 
+  scale_x_discrete(limits=month.abb) 
 
 #boxplot for goal
 ks_cleaned %>%
