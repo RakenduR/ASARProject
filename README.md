@@ -1,4 +1,4 @@
-# Kickstarter-Project-Outcome-Prediction
+# Kickstarter Project Outcome Prediction
 
 This project was done as a part of Applied Statistical Analysis Course at SMU.
 
